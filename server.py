@@ -18,6 +18,15 @@ def get_server_privateKey():
         server_key = serverKeyFile.read()
     return server_key    
 
+
+def get_client_pub_key(clientUser):
+    '''
+    Retrieves the clients public key from a file
+    '''
+    with open(clientUser + "_public.pem", "rb") as publicKeyFile:
+        pub_key = publicKeyFile.read()
+    return pub_key
+
 def make_symKey():
     '''
     Generates a 256 AES key to continue server-client communication
@@ -34,10 +43,10 @@ def encrypt_RSA(message, key):
     '''
     pubkey = RSA.import_key(key)
     cipher_rsa_en = PKCS1_OAEP.new(pubkey)
-    enc_data = cipher_rsa_en.encrypt(message.encode('ascii')) 
+    enc_data = cipher_rsa_en.encrypt(message) 
     return enc_data
 
-def decrypt_RSA(en_msg):
+def decrypt_RSA(enc_msg):
     '''
     Decrypts a message with RSA
     '''
@@ -45,7 +54,7 @@ def decrypt_RSA(en_msg):
     cipher_rsa_dec = PKCS1_OAEP.new(privkey)
     dec_data = cipher_rsa_dec.decrypt(enc_msg)
     #print(dec_data.decode('ascii'))    
-    return dec_data.decode('ascii')
+    return dec_data
 
 def encrypt_sym(message, cipher):
     '''
@@ -61,7 +70,7 @@ def decrypt_sym(en_msg, cipher):
     padded_msg = cipher.decrypt(en_msg)
     #Remove padding
     encoded_msg = unpad(padded_msg, 16)
-    return enc_data.decode('ascii')
+    return enc_data
 
 def server():
     #Server port
@@ -102,12 +111,45 @@ def server():
                 en_userPass = connectionSocket.recv(2048)
                 
                 #Decrypt username and password
-                userPass = decrypt_RSA(userPass)
+                userPass = decrypt_RSA(en_userPass).decode('ascii')
                 clientUser, clientPass = userPass.split(' ')
+                print(clientUser, clientPass)
                 
-                #Check if username and password are valid
-                #TODO - Need to creat JSON file to match
-                #
+                
+                #Check if username and password are valid 
+                with open("user_pass.json", "r") as read_file:
+                    data = json.load(read_file)
+                    
+                    # Respond to corect or incorrect credentials
+                    credential_match = False
+                    if clientUser in data:
+                        stored_pass = data[clientUser] 
+                        if stored_pass == clientPass:
+                            print("Connection Accepted and Symmetric Key Generated for client: ", clientUser)
+                            authentication_response = "GOODCRED"
+                            credential_match = True
+                            connectionSocket.send(authentication_response.encode('ascii'))
+                    else:
+                        authentication_response = "BADCRED"        
+                        connectionSocket.send(authentication_response.encode('ascii'))
+                        print("The received client information: ", clientUser, " is invalid (Connection Terminated)")
+                
+
+                
+                if credential_match:
+                    # gen symkey, encrypt RSA and send
+                    sym_key = make_symKey()
+                    en_sym_key = encrypt_RSA(sym_key, get_client_pub_key(clientUser))
+                    connectionSocket.send(en_sym_key)
+                    pass
+
+                else:
+                    connectionSocket.send("Invalid username or password.\nTerminating.".encode('ascii'))
+                    connectionSocket.close()
+                    return
+                
+                
+
                 
                 
                 # if match
@@ -117,6 +159,9 @@ def server():
                 #else:
                 #connectionSocket.send("Invalid Username or password")
                 #print("The received client information: ", clientUser, " is invalid (Connection Terminated)")
+
+                # WHILE LOOP FOR MENU GOES HERE
+
                 connectionSocket.close()
                 
                 return
@@ -128,8 +173,8 @@ def server():
             print('An error occured:',e)
             serverSocket.close() 
             sys.exit(1)        
-        except:
-            print('Goodbye')
+        except Exception as e:
+            print(e)
             serverSocket.close() 
             sys.exit(0)
             
