@@ -32,10 +32,10 @@ def encrypt_RSA(message, key):
     '''
     pubkey = RSA.import_key(key)
     cipher_rsa_en = PKCS1_OAEP.new(pubkey)
-    enc_data = cipher_rsa_en.encrypt(message.encode('ascii')) 
+    enc_data = cipher_rsa_en.encrypt(message) 
     return enc_data
 
-def decrypt_RSA(en_msg, clientUser):
+def decrypt_RSA(enc_msg, clientUser):
     '''
     Decrypts a message with RSA
     '''
@@ -43,13 +43,13 @@ def decrypt_RSA(en_msg, clientUser):
     cipher_rsa_dec = PKCS1_OAEP.new(privkey)
     dec_data = cipher_rsa_dec.decrypt(enc_msg)
     #print(dec_data.decode('ascii'))    
-    return dec_data.decode('ascii')
+    return dec_data
 
 def encrypt_sym(message, cipher):
     '''
     Encrypts a message using the symmetric key
     '''
-    en_data = cipher.encrypt(pad(message.encode('ascoo'), 16))
+    en_data = cipher.encrypt(pad(message.encode('ascii'), 16))
     return enc_data
 
 def decrypt_sym(en_msg, cipher):
@@ -81,18 +81,41 @@ def client():
         
         #Ask user to enter their username and password
         username = input("Enter your username: ")
-        password = input("Enter your password")
+        password = input("Enter your password: ")
         
         userPass = username + " " + password
         #Encrypt both with server public key and send
-        en_UserPass = encrypt_RSA(userPass, get_Server_key())
+        en_UserPass = encrypt_RSA(userPass.encode('ascii'), get_Server_key())
         
         #Client send encrypted userPass message to the server
         clientSocket.send(en_UserPass)
         
-        # Client receives a message from the server and print it
-        message = clientSocket.recv(2048)
-        print(message.decode('ascii'))
+        
+        #Client recieves USERNAME/PASS verification result from the server 
+        authentication_response = clientSocket.recv(2048).decode('ascii')
+        print(authentication_response)
+
+        # authentication response var tells us what to expect back based on login attempt
+        # If the credentials were bad, expect to hear about it from the server w/ unecrypted msg
+        # If good, expect to recieve the encrypted SYM KEY
+        if authentication_response == "GOODCRED":            
+            # receive SYM_KEY (RSA encrypted)
+            sym_key = decrypt_RSA(clientSocket.recv(2048), username) 
+            print("SYMKEY: ", sym_key)
+        else:
+         # recieve a msg that we've entered the wrong credentials and then terminate
+         print(clientSocket.recv(2048).decode('ascii'))
+         clientSocket.close()    
+                
+        # While loop to handle MENU answers/responses from server
+        # menu_text = clientSocket.recv(2048), except use the SYM KEY decryption, u get it 
+        # choice = input(menu_text)
+        # if choice == 1
+        #  send choice to server..
+        # if choice == 2
+        # if choice == 3
+        # if choice == 4
+        #   terminate connection...
         
         # Client terminate connection with the server
         clientSocket.close()

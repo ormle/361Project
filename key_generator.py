@@ -7,6 +7,7 @@
 from Crypto.PublicKey import RSA
 from Crypto.Random import get_random_bytes
 from Crypto.Cipher import PKCS1_OAEP
+import json
 
 #Creates a public key for the client
 def make_Client_Keys(clientUser):
@@ -16,7 +17,7 @@ def make_Client_Keys(clientUser):
     '''
     key = RSA.generate(2048)
     privateKey = key.export_key()
-    publicKey = key.publickey.export_key()
+    publicKey = key.publickey().export_key()
     
     #Write keys to respective files
     with open(clientUser + "_private.pem", "wb") as privateKey_File:
@@ -33,7 +34,7 @@ def make_Server_Keys():
     '''
     key = RSA.generate(2048)
     privateKey = key.export_key()
-    publicKey = key.publickey.export_key()
+    publicKey = key.publickey().export_key()
     
     #Write keys to respective files
     with open("server_private.pem", "wb") as privateKey_File:
