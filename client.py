@@ -49,7 +49,7 @@ def encrypt_sym(message, cipher):
     '''
     Encrypts a message using the symmetric key
     '''
-    en_data = cipher.encrypt(pad(message.encode('ascii'), 16))
+    enc_data = cipher.encrypt(pad(message.encode('ascii'), 16))
     return enc_data
 
 def decrypt_sym(en_msg, cipher):
@@ -58,8 +58,8 @@ def decrypt_sym(en_msg, cipher):
     '''
     padded_msg = cipher.decrypt(en_msg)
     #Remove padding
-    encoded_msg = unpad(padded_msg, 16)
-    return enc_data.decode('ascii')
+    data = unpad(padded_msg, 16)
+    return data.decode('ascii')
 
 def client():
     IpName = input("Enter the server IP or name: ")
