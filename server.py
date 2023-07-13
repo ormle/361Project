@@ -7,6 +7,8 @@
 
 import socket, sys, json, os, glob, datetime
 from Crypto.PublicKey import RSA
+from Crypto.Cipher import AES
+from Crypto.Util.Padding import pad, unpad
 from Crypto.Random import get_random_bytes
 from Crypto.Cipher import PKCS1_OAEP
 
@@ -60,7 +62,7 @@ def encrypt_sym(message, cipher):
     '''
     Encrypts a message using the symmetric key
     '''
-    en_data = cipher.encrypt(pad(message.encode('ascoo'), 16))
+    enc_data = cipher.encrypt(pad(message.encode('ascii'), 16))
     return enc_data
 
 def decrypt_sym(en_msg, cipher):
@@ -69,12 +71,12 @@ def decrypt_sym(en_msg, cipher):
     '''
     padded_msg = cipher.decrypt(en_msg)
     #Remove padding
-    encoded_msg = unpad(padded_msg, 16)
-    return enc_data
+    data = unpad(padded_msg, 16)
+    return data.decode('ascii')
 
 def server():
     #Server port
-    serverPort = 13000
+    serverPort = 13004
     
     #Create server socket that uses IPv4 and TCP protocols 
     try:
@@ -146,24 +148,36 @@ def server():
                 else:
                     connectionSocket.send("Invalid username or password.\nTerminating.".encode('ascii'))
                     connectionSocket.close()
-                    return
+                    return               
                 
-                
+                sym_cipher = AES.new(sym_key, AES.MODE_ECB) # prep cipher w/ symkey for use
+                # while loop for the menu and client requests
+                while True:
 
-                
-                
-                # if match
-                #sym_key = make_symKey();
-                #print("Connection Accepted and Symmetric Key Generated for client: ", clientUser)
-                
-                #else:
-                #connectionSocket.send("Invalid Username or password")
-                #print("The received client information: ", clientUser, " is invalid (Connection Terminated)")
+                    menu_msg = '''Select the operation:
+    1) Create and send an email
+    2) Display the inbox list
+    3) Display the email contents
+    4) Terminate the connection
+    choice: '''
+                    # Encrypt the menu and send it to the client side
+                    en_menu_msg = encrypt_sym(menu_msg, sym_cipher)
+                    connectionSocket.send(en_menu_msg)
 
-                # WHILE LOOP FOR MENU GOES HERE
-
-                connectionSocket.close()
-                
+                    # Receive choice and act accordingly
+                    user_choice = decrypt_sym(connectionSocket.recv(2048), sym_cipher)
+                    print("Users choice was: " + user_choice)
+                    if user_choice == "1":
+                        pass
+                    if user_choice == "2":
+                        pass
+                    if user_choice == "3":
+                        pass
+                    if user_choice == "4":
+                        print("Connection terminated with " + clientUser + ".")
+                        break
+                             
+                connectionSocket.close()                
                 return
             
             #Parent doesn't need this connection
