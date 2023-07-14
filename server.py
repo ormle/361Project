@@ -74,9 +74,64 @@ def decrypt_sym(en_msg, cipher):
     data = unpad(padded_msg, 16)
     return data.decode('ascii')
 
+    
+def save_email(email, title, to):
+	'''
+	This function saves the email as a text file into each 
+	of the clients folders
+	'''
+	to_list = list(to.split(";"))
+	for x in to_list:
+		save = "./" + x
+		file_name = title + ".txt"
+		#Get the folder we need to save into
+		full_name = os.path.join(save, file_name)
+		file1 = open(full_name, "w")
+		file1.write(email)
+		file1.close()
+	return
+	
+def get_json(client):
+	'''
+	This function loads the json information into a dictionary
+	Opens the folder of the client requested
+	'''
+	folder = "./" + client
+	file_name = client + "_Dict.json"
+	full_name = os.path.join(folder, file_name)
+	j = open(full_name)
+	json_data = json.load(j)
+	j.close()
+	return json_data
+	
+def save_json(client, data_list):
+	'''
+	This function updates the json dictionary of each of the client
+	that receive the email
+	'''
+	to_list = list(client.split(";"))
+	for x in to_list:
+		#Get the dictionary
+		json_data = get_json(x)
+		#Add a new index
+		index = len(json_data)
+		json_data[index+1] = data_list
+		#Add the new dictionary into a json object
+		json_object = json.dumps(json_data, indent = 4)
+		#Get the json file from the folder of the client
+		folder = "./" + x
+		file_name = x + "_Dict.json"
+		full_name = os.path.join(folder, file_name)
+		#Update the json file
+		with open(full_name, "w") as outfile:
+			outfile.write(json_object)
+
+
 def server():
     #Server port
     serverPort = 13004
+    
+    json_dict = {}
     
     #Create server socket that uses IPv4 and TCP protocols 
     try:
@@ -116,6 +171,8 @@ def server():
                 userPass = decrypt_RSA(en_userPass).decode('ascii')
                 clientUser, clientPass = userPass.split(' ')
                 print(clientUser, clientPass)
+                
+                
                 
                 
                 #Check if username and password are valid 
@@ -168,7 +225,37 @@ def server():
                     user_choice = decrypt_sym(connectionSocket.recv(2048), sym_cipher)
                     print("Users choice was: " + user_choice)
                     if user_choice == "1":
-                        pass
+
+                    	#Send ok message
+                    	ok_message = encrypt_sym("Send the email", sym_cipher)
+                    	connectionSocket.send(ok_message)
+                    	
+                    	email_list = []
+                    	#Receive the email information
+                    	for x in range(5):
+                    		info = decrypt_sym(connectionSocket.recv(2048), sym_cipher)
+                    		print(info)
+                    		email_list.append(info)
+                    		#send ok message
+                    		ok_message = encrypt_sym("ok", sym_cipher)
+                    		connectionSocket.send(ok_message)
+                    	#Get time and date information
+                    	time = datetime.datetime.now()
+                    	date = time.strftime("%Y-%m-%d %H:%M:%S")
+                    	#Save email information
+                    	From = email_list[0]
+                    	To = email_list[1]
+                    	Title = email_list[2]
+                    	length = email_list[3]
+                    	content = email_list[4]
+                    	email = "From: " + From + "\nTo: " + To + "\nTime and Date: " + date + "\nTitle: " + Title + "\nContent Length: " + length + "\nContent:\n" + content + "\n"
+                    	#Save the email
+                    	save_email(email, Title, To)
+                    	#Update the json dictionary for each client
+                    	data_list = [From, date, Title]
+                    	save_json(To, data_list)
+                    	
+
                     if user_choice == "2":
                         pass
                     if user_choice == "3":

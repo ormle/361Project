@@ -63,10 +63,50 @@ def decrypt_sym(en_msg, cipher):
     data = unpad(padded_msg, 16)
     return data.decode('ascii')
 
+    
+def get_content(client):
+	'''
+	This function creates the content in the email
+	The user can load a text file or type themselves
+	'''
+	load = input("Would you like to load contents from a file?(Y/N): ")
+	if load == "Y":
+		folder = "./" + client
+		file_name = input("Enter filename: ")
+		#Get the file from the users folder
+		full_name = os.path.join(folder, file_name)
+		
+		f = open(full_name, "r")
+		e_content = f.read()
+		f.close()
+	else:
+		e_content = input("Enter message contents: ")
+	return e_content
+    
+def make_email(client):
+	'''
+	This function makes the email list
+	It call on another function to get the content
+	'''
+	e_to = input("Enter destinations (seperated by ;): ")
+	e_title = input("Enter title: ")
+	while len(e_title) > 99:
+		e_title = input("Title too long. Try again: ")
+	e_content = get_content(client)
+	while len(e_content) > 999999:
+		print("Email content too long. Try Again")
+		e_content = get_content(client)
+	length = len(e_content)
+	email = [e_to, e_title, str(length), e_content]
+	return email
+	
+
+
 def client():    
     # Server Information
     serverName = input("Enter the server IP or name: ")   
-    serverPort = 13004
+    serverPort = 13000
+
     
     #Create client socket that using IPv4 and TCP protocols 
     try:
@@ -117,7 +157,21 @@ def client():
             # send choice over to server-side
             clientSocket.send(encrypt_sym(user_choice, sym_cipher))
             if user_choice == "1":
-                pass
+
+            	#Receive the ok message
+            	ok_message = decrypt_sym(clientSocket.recv(2048), sym_cipher)
+            	#Start making the email
+            	email_list = make_email(username)
+            	#Get and send the From
+            	e_from = username
+            	clientSocket.send(encrypt_sym(e_from, sym_cipher))
+            	ok_message = decrypt_sym(clientSocket.recv(2048), sym_cipher)
+            	#Loop through email list to send rest of email
+            	for x in email_list:
+            		print(x)
+            		clientSocket.send(encrypt_sym(x, sym_cipher))
+            		ok_message = decrypt_sym(clientSocket.recv(2048), sym_cipher)
+
             if user_choice == "2":
                 pass
             if user_choice == "3":
