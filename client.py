@@ -6,6 +6,8 @@
 #===============================================================================
 import socket, sys, json, os, glob, datetime
 from Crypto.PublicKey import RSA
+from Crypto.Cipher import AES
+from Crypto.Util.Padding import pad, unpad
 from Crypto.Random import get_random_bytes
 from Crypto.Cipher import PKCS1_OAEP
 
@@ -49,7 +51,7 @@ def encrypt_sym(message, cipher):
     '''
     Encrypts a message using the symmetric key
     '''
-    en_data = cipher.encrypt(pad(message.encode('ascii'), 16))
+    enc_data = cipher.encrypt(pad(message.encode('ascii'), 16))
     return enc_data
 
 def decrypt_sym(en_msg, cipher):
@@ -58,14 +60,49 @@ def decrypt_sym(en_msg, cipher):
     '''
     padded_msg = cipher.decrypt(en_msg)
     #Remove padding
-    encoded_msg = unpad(padded_msg, 16)
-    return enc_data.decode('ascii')
-
-def client():
-    IpName = input("Enter the server IP or name: ")
+    data = unpad(padded_msg, 16)
+    return data.decode('ascii')
     
+def get_content(client):
+	'''
+	This function creates the content in the email
+	The user can load a text file or type themselves
+	'''
+	load = input("Would you like to load contents from a file?(Y/N): ")
+	if load == "Y":
+		folder = "./" + client
+		file_name = input("Enter filename: ")
+		#Get the file from the users folder
+		full_name = os.path.join(folder, file_name)
+		
+		f = open(full_name, "r")
+		e_content = f.read()
+		f.close()
+	else:
+		e_content = input("Enter message contents: ")
+	return e_content
+    
+def make_email(client):
+	'''
+	This function makes the email list
+	It call on another function to get the content
+	'''
+	e_to = input("Enter destinations (seperated by ;): ")
+	e_title = input("Enter title: ")
+	while len(e_title) > 99:
+		e_title = input("Title too long. Try again: ")
+	e_content = get_content(client)
+	while len(e_content) > 999999:
+		print("Email content too long. Try Again")
+		e_content = get_content(client)
+	length = len(e_content)
+	email = [e_to, e_title, str(length), e_content]
+	return email
+	
+
+def client():    
     # Server Information
-    serverName = '127.0.0.1' #'localhost'
+    serverName = input("Enter the server IP or name: ")   
     serverPort = 13000
     
     #Create client socket that using IPv4 and TCP protocols 
@@ -93,7 +130,7 @@ def client():
         
         #Client recieves USERNAME/PASS verification result from the server 
         authentication_response = clientSocket.recv(2048).decode('ascii')
-        print(authentication_response)
+        #print(authentication_response)
 
         # authentication response var tells us what to expect back based on login attempt
         # If the credentials were bad, expect to hear about it from the server w/ unecrypted msg
@@ -101,22 +138,44 @@ def client():
         if authentication_response == "GOODCRED":            
             # receive SYM_KEY (RSA encrypted)
             sym_key = decrypt_RSA(clientSocket.recv(2048), username) 
-            print("SYMKEY: ", sym_key)
+            #print("SYMKEY: ", sym_key)
         else:
          # recieve a msg that we've entered the wrong credentials and then terminate
          print(clientSocket.recv(2048).decode('ascii'))
-         clientSocket.close()    
-                
-        # While loop to handle MENU answers/responses from server
-        # menu_text = clientSocket.recv(2048), except use the SYM KEY decryption, u get it 
-        # choice = input(menu_text)
-        # if choice == 1
-        #  send choice to server..
-        # if choice == 2
-        # if choice == 3
-        # if choice == 4
-        #   terminate connection...
-        
+         clientSocket.close()  
+         return 
+
+        sym_cipher = AES.new(sym_key, AES.MODE_ECB) # prep cipher w/ symkey for use
+        # while loop for the menu and client requests
+        while True:            
+            # collect choice from client
+            menu_msg = decrypt_sym(clientSocket.recv(2048), sym_cipher)
+            user_choice = input(menu_msg)
+            # send choice over to server-side
+            clientSocket.send(encrypt_sym(user_choice, sym_cipher))
+            if user_choice == "1":
+            	#Receive the ok message
+            	ok_message = decrypt_sym(clientSocket.recv(2048), sym_cipher)
+            	#Start making the email
+            	email_list = make_email(username)
+            	#Get and send the From
+            	e_from = username
+            	clientSocket.send(encrypt_sym(e_from, sym_cipher))
+            	ok_message = decrypt_sym(clientSocket.recv(2048), sym_cipher)
+            	#Loop through email list to send rest of email
+            	for x in email_list:
+            		print(x)
+            		clientSocket.send(encrypt_sym(x, sym_cipher))
+            		ok_message = decrypt_sym(clientSocket.recv(2048), sym_cipher)
+
+            if user_choice == "2":
+                pass
+            if user_choice == "3":
+                pass
+            if user_choice == "4":
+                print("Terminating connection with the server.")
+                break        
+       
         # Client terminate connection with the server
         clientSocket.close()
         
