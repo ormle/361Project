@@ -7,6 +7,8 @@
 
 import socket, sys, json, os, glob, datetime
 from Crypto.PublicKey import RSA
+from Crypto.Cipher import AES
+from Crypto.Util.Padding import pad, unpad
 from Crypto.Random import get_random_bytes
 from Crypto.Cipher import PKCS1_OAEP
 
@@ -60,7 +62,7 @@ def encrypt_sym(message, cipher):
     '''
     Encrypts a message using the symmetric key
     '''
-    en_data = cipher.encrypt(pad(message.encode('ascoo'), 16))
+    enc_data = cipher.encrypt(pad(message.encode('ascii'), 16))
     return enc_data
 
 def decrypt_sym(en_msg, cipher):
@@ -69,12 +71,65 @@ def decrypt_sym(en_msg, cipher):
     '''
     padded_msg = cipher.decrypt(en_msg)
     #Remove padding
-    encoded_msg = unpad(padded_msg, 16)
-    return enc_data
+    data = unpad(padded_msg, 16)
+    return data.decode('ascii')
+    
+def save_email(email, title, to):
+	'''
+	This function saves the email as a text file into each 
+	of the clients folders
+	'''
+	to_list = list(to.split(";"))
+	for x in to_list:
+		save = "./" + x
+		file_name = title + ".txt"
+		#Get the folder we need to save into
+		full_name = os.path.join(save, file_name)
+		file1 = open(full_name, "w")
+		file1.write(email)
+		file1.close()
+	return
+	
+def get_json(client):
+	'''
+	This function loads the json information into a dictionary
+	Opens the folder of the client requested
+	'''
+	folder = "./" + client
+	file_name = client + "_Dict.json"
+	full_name = os.path.join(folder, file_name)
+	j = open(full_name)
+	json_data = json.load(j)
+	j.close()
+	return json_data
+	
+def save_json(client, data_list):
+	'''
+	This function updates the json dictionary of each of the client
+	that receive the email
+	'''
+	to_list = list(client.split(";"))
+	for x in to_list:
+		#Get the dictionary
+		json_data = get_json(x)
+		#Add a new index
+		index = len(json_data)
+		json_data[index+1] = data_list
+		#Add the new dictionary into a json object
+		json_object = json.dumps(json_data, indent = 4)
+		#Get the json file from the folder of the client
+		folder = "./" + x
+		file_name = x + "_Dict.json"
+		full_name = os.path.join(folder, file_name)
+		#Update the json file
+		with open(full_name, "w") as outfile:
+			outfile.write(json_object)
 
 def server():
     #Server port
     serverPort = 13000
+    
+    json_dict = {}
     
     #Create server socket that uses IPv4 and TCP protocols 
     try:
@@ -116,6 +171,8 @@ def server():
                 print(clientUser, clientPass)
                 
                 
+                
+                
                 #Check if username and password are valid 
                 with open("user_pass.json", "r") as read_file:
                     data = json.load(read_file)
@@ -146,24 +203,65 @@ def server():
                 else:
                     connectionSocket.send("Invalid username or password.\nTerminating.".encode('ascii'))
                     connectionSocket.close()
-                    return
+                    return               
                 
-                
+                sym_cipher = AES.new(sym_key, AES.MODE_ECB) # prep cipher w/ symkey for use
+                # while loop for the menu and client requests
+                while True:
 
-                
-                
-                # if match
-                #sym_key = make_symKey();
-                #print("Connection Accepted and Symmetric Key Generated for client: ", clientUser)
-                
-                #else:
-                #connectionSocket.send("Invalid Username or password")
-                #print("The received client information: ", clientUser, " is invalid (Connection Terminated)")
+                    menu_msg = '''Select the operation:
+    1) Create and send an email
+    2) Display the inbox list
+    3) Display the email contents
+    4) Terminate the connection
+    choice: '''
+                    # Encrypt the menu and send it to the client side
+                    en_menu_msg = encrypt_sym(menu_msg, sym_cipher)
+                    connectionSocket.send(en_menu_msg)
 
-                # WHILE LOOP FOR MENU GOES HERE
-
-                connectionSocket.close()
-                
+                    # Receive choice and act accordingly
+                    user_choice = decrypt_sym(connectionSocket.recv(2048), sym_cipher)
+                    print("Users choice was: " + user_choice)
+                    if user_choice == "1":
+                    	#Send ok message
+                    	ok_message = encrypt_sym("Send the email", sym_cipher)
+                    	connectionSocket.send(ok_message)
+                    	
+                    	email_list = []
+                    	#Receive the email information
+                    	for x in range(5):
+                    		info = decrypt_sym(connectionSocket.recv(2048), sym_cipher)
+                    		print(info)
+                    		email_list.append(info)
+                    		#send ok message
+                    		ok_message = encrypt_sym("ok", sym_cipher)
+                    		connectionSocket.send(ok_message)
+                    	#Get time and date information
+                    	time = datetime.datetime.now()
+                    	date = time.strftime("%Y-%m-%d %H:%M:%S")
+                    	#Save email information
+                    	From = email_list[0]
+                    	To = email_list[1]
+                    	Title = email_list[2]
+                    	length = email_list[3]
+                    	content = email_list[4]
+                    	email = "From: " + From + "\nTo: " + To + "\nTime and Date: " + date + "\nTitle: " + Title + "\nContent Length: " + length + "\nContent:\n" + content + "\n"
+                    	#Save the email
+                    	save_email(email, Title, To)
+                    	#Update the json dictionary for each client
+                    	data_list = [From, date, Title]
+                    	save_json(To, data_list)
+                    	
+                        pass
+                    if user_choice == "2":
+                        pass
+                    if user_choice == "3":
+                        pass
+                    if user_choice == "4":
+                        print("Connection terminated with " + clientUser + ".")
+                        break
+                             
+                connectionSocket.close()                
                 return
             
             #Parent doesn't need this connection
