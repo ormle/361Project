@@ -62,6 +62,7 @@ def decrypt_sym(en_msg, cipher):
     #Remove padding
     data = unpad(padded_msg, 16)
     return data.decode('ascii')
+
     
 def get_content(client):
 	'''
@@ -100,10 +101,12 @@ def make_email(client):
 	return email
 	
 
+
 def client():    
     # Server Information
     serverName = input("Enter the server IP or name: ")   
     serverPort = 13000
+
     
     #Create client socket that using IPv4 and TCP protocols 
     try:
@@ -154,6 +157,7 @@ def client():
             # send choice over to server-side
             clientSocket.send(encrypt_sym(user_choice, sym_cipher))
             if user_choice == "1":
+
             	#Receive the ok message
             	ok_message = decrypt_sym(clientSocket.recv(2048), sym_cipher)
             	#Start making the email

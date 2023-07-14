@@ -73,6 +73,7 @@ def decrypt_sym(en_msg, cipher):
     #Remove padding
     data = unpad(padded_msg, 16)
     return data.decode('ascii')
+
     
 def save_email(email, title, to):
 	'''
@@ -125,9 +126,10 @@ def save_json(client, data_list):
 		with open(full_name, "w") as outfile:
 			outfile.write(json_object)
 
+
 def server():
     #Server port
-    serverPort = 13000
+    serverPort = 13004
     
     json_dict = {}
     
@@ -223,6 +225,7 @@ def server():
                     user_choice = decrypt_sym(connectionSocket.recv(2048), sym_cipher)
                     print("Users choice was: " + user_choice)
                     if user_choice == "1":
+
                     	#Send ok message
                     	ok_message = encrypt_sym("Send the email", sym_cipher)
                     	connectionSocket.send(ok_message)
@@ -252,7 +255,7 @@ def server():
                     	data_list = [From, date, Title]
                     	save_json(To, data_list)
                     	
-                        pass
+
                     if user_choice == "2":
                         pass
                     if user_choice == "3":
