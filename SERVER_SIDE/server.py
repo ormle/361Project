@@ -125,11 +125,12 @@ def save_json(client, data_list):
 		#Update the json file
 		with open(full_name, "w") as outfile:
 			outfile.write(json_object)
+                        
 
 
 def server():
     #Server port
-    serverPort = 13009
+    serverPort = 13000
     
     json_dict = {}
     
@@ -180,13 +181,17 @@ def server():
                     
                     # Respond to corect or incorrect credentials
                     credential_match = False
-                    if clientUser in data:
+                    if clientUser in data: # username check
                         stored_pass = data[clientUser] 
-                        if stored_pass == clientPass:
+                        if stored_pass == clientPass: # password check
                             print("Connection Accepted and Symmetric Key Generated for client: ", clientUser)
                             authentication_response = "GOODCRED"
                             credential_match = True
                             connectionSocket.send(authentication_response.encode('ascii'))
+                        else:
+                            authentication_response = "BADCRED"        
+                            connectionSocket.send(authentication_response.encode('ascii'))
+                            print("The received client information: ", clientUser, " is invalid (Connection Terminated)")
                     else:
                         authentication_response = "BADCRED"        
                         connectionSocket.send(authentication_response.encode('ascii'))
@@ -222,7 +227,7 @@ def server():
 
                     # Receive choice and act accordingly
                     user_choice = decrypt_sym(connectionSocket.recv(2048), sym_cipher)
-                    print("Users choice was: " + user_choice)
+                    print("Users menu choice was: " + user_choice)
                     if user_choice == "1":
 
                         #Send ok message
@@ -258,7 +263,44 @@ def server():
                     if user_choice == "2":
                         pass
                     if user_choice == "3":
-                        pass
+                        # View email protocol --
+
+                        # Retrieve the email index range from client dict
+                        client_dict = get_json(clientUser)
+                        n_index = len(client_dict)
+                        
+                        # Ask the user for their index choice
+                        # Also send the email index range for input check on client side
+                        index_msg = encrypt_sym("the server request email index;" + str(n_index), sym_cipher)
+                        connectionSocket.send(index_msg)
+
+                        if n_index == 0: # inbox empty return to menu
+                             continue
+                        
+                        # Receive index choice back 
+                        index_choice = decrypt_sym(connectionSocket.recv(2048), sym_cipher)
+                        print("User index choice was: " + index_choice)
+                        # Retrieve the file based on index from client JSON
+                        email_name = client_dict[index_choice][2]
+                        print("email chosen: " + email_name + ".txt")
+
+                        # Send file size to the client-side             
+                        #f_sz = os.path.getsize(os.path.join(clientUser, email_name + ".txt"))
+                        
+                        
+                        # Open text file, send encrypted bytes to client
+                        with open(os.path.join(clientUser, email_name + ".txt"), 'rb') as f:
+                            chunk = f.read()
+                            pad_chunk = pad(chunk, 16)
+                            en_chunk = sym_cipher.encrypt(pad_chunk)
+                            en_file_sz = str(len(en_chunk))
+
+                            connectionSocket.send(encrypt_sym(en_file_sz, sym_cipher))
+                            ok_msg = connectionSocket.recv(2048)
+                            connectionSocket.sendall(en_chunk)
+                        ok_msg = connectionSocket.recv(2048)       
+                                             
+                                        
                     if user_choice == "4":
                         print("Connection terminated with " + clientUser + ".")
                         break
