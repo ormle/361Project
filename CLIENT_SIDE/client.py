@@ -99,14 +99,30 @@ def make_email(client):
 	length = len(e_content)
 	email = [e_to, e_title, str(length), e_content]
 	return email
+
+
+def encrypt_sym_raw(message, cipher):
+    '''
+    Encrypts a message using the symmetric key ** no ascii encoding
+    '''
+    enc_data = cipher.encrypt(pad(message, 16))
+    return enc_data
+
+def decrypt_sym_raw(en_msg, cipher):
+    '''
+    Decrypts a message using the symmetric key ** no ascii encoding 
+    '''
+    padded_msg = cipher.decrypt(en_msg)
+    #Remove padding
+    data = unpad(padded_msg, 16)
+    return data
 	
 
 
 def client():    
     # Server Information
     serverName = input("Enter the server IP or name: ")   
-    serverPort = 13009
-
+    serverPort = 13000
     
     #Create client socket that using IPv4 and TCP protocols 
     try:
@@ -175,7 +191,52 @@ def client():
             if user_choice == "2":
                 pass
             if user_choice == "3":
-                pass
+                # View email protocol 
+                # Receive index msg + index range
+                index_msg = clientSocket.recv(2048)
+                index_msg = decrypt_sym(index_msg, sym_cipher)
+                index_msg, index_range = index_msg.split(";")
+                #print(index_msg, index_range)
+                # Check if inbox empty
+                if int(index_range) == 0:
+                    print("Inbox is empty. Returning to main menu.")
+                    continue
+                # Inbox non-empty, get index from client && check if its valid
+                while True: 
+                    index_choice = input("Enter the email index you wish to view: ")
+                    if int(index_choice) <= int(index_range) and (int(index_choice) >= 0):
+                        break
+                # Send index choice back
+                clientSocket.send(encrypt_sym(index_choice, sym_cipher))                
+
+                # recieve the file size
+                en_file_sz = decrypt_sym(clientSocket.recv(2048), sym_cipher)
+                print(en_file_sz)    
+                # send ok msg
+                clientSocket.send(encrypt_sym("ok",sym_cipher))          
+
+
+                # Note: this following loop was adapted from this example at
+                # https://geekyhumans.com/encrypted-file-transfer-via-sockets-in-python/
+                # Receive email as encrypted byte chunks from server-side
+                print("Beginning file transfer...")
+                f_bytes = b""                
+                while len(f_bytes) < int(en_file_sz):                     
+                    f_bytes += clientSocket.recv(4096)
+                    
+                
+                print("Encrypted File transmitted..")
+                pad_bytes = sym_cipher.decrypt(f_bytes)
+                bytes = unpad(pad_bytes, 16)
+                print(str(bytes, 'ascii'))              
+                           
+                # send ok msg
+                clientSocket.send(encrypt_sym("ok",sym_cipher))        
+                
+                
+                     
+                      
+        
             if user_choice == "4":
                 print("Terminating connection with the server.")
                 break        
