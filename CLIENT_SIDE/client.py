@@ -71,12 +71,14 @@ def get_content(client):
 	'''
 	load = input("Would you like to load contents from a file?(Y/N): ")
 	if load == "Y":
+
 		#folder = "./" + client
 		file_name = input("Enter filename: ")
 		#Get the file from the users folder
 		#full_name = os.path.join(folder, file_name)
 		
 		f = open(file_name, "r")
+
 		e_content = f.read()
 		f.close()
 	else:
@@ -178,6 +180,7 @@ def client():
                 ok_message = decrypt_sym(clientSocket.recv(2048), sym_cipher)
                 #Start making the email
                 email_list = make_email(username)
+
                 content_size = str(len((encrypt_sym(email_list[3], sym_cipher))))
                 clientSocket.send(encrypt_sym(content_size, sym_cipher))
                 ok_message = decrypt_sym(clientSocket.recv(2048), sym_cipher)
@@ -187,10 +190,19 @@ def client():
                 e_from = username
                 clientSocket.send(encrypt_sym(e_from, sym_cipher))
                 ok_message = decrypt_sym(clientSocket.recv(2048), sym_cipher)
+
                 #Loop through rest of email
                 for x in email_list:
                 	clientSocket.send(encrypt_sym(x, sym_cipher))
                 	ok_message = decrypt_sym(clientSocket.recv(2048), sym_cipher)
+
+                #Loop through email list to send rest of email
+                for x in email_list:
+                    print(x)
+                    clientSocket.send(encrypt_sym(x, sym_cipher))
+                    ok_message = decrypt_sym(clientSocket.recv(2048), sym_cipher)
+
+
             if user_choice == "2":
                 pass
             if user_choice == "3":

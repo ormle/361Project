@@ -234,6 +234,7 @@ def server():
                         ok_message = encrypt_sym("Send the email", sym_cipher)
                         connectionSocket.send(ok_message)
                         
+
                         content_size = int(decrypt_sym(connectionSocket.recv(2048), sym_cipher))
                         print("Content size: ", content_size)
                         connectionSocket.send(ok_message)
@@ -264,6 +265,17 @@ def server():
                         		ok_message = encrypt_sym("ok", sym_cipher)
                         		connectionSocket.send(ok_message)
                         		
+
+                        email_list = []
+                        #Receive the email information
+                        for x in range(5):
+                            info = decrypt_sym(connectionSocket.recv(2048), sym_cipher)
+                            print(info)
+                            email_list.append(info)
+                            #send ok message
+                            ok_message = encrypt_sym("ok", sym_cipher)
+                            connectionSocket.send(ok_message)
+
                         #Get time and date information
                         time = datetime.datetime.now()
                         date = time.strftime("%Y-%m-%d %H:%M:%S")
