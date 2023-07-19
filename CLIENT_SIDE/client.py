@@ -193,15 +193,9 @@ def client():
 
                 #Loop through rest of email
                 for x in email_list:
-                	clientSocket.send(encrypt_sym(x, sym_cipher))
-                	ok_message = decrypt_sym(clientSocket.recv(2048), sym_cipher)
-
-                #Loop through email list to send rest of email
-                for x in email_list:
-                    print(x)
                     clientSocket.send(encrypt_sym(x, sym_cipher))
                     ok_message = decrypt_sym(clientSocket.recv(2048), sym_cipher)
-
+                
 
             if user_choice == "2":
                 pass

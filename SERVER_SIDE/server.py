@@ -242,39 +242,32 @@ def server():
                         email_list = []
                         #Receive the email information
                         for x in range(5):
-                        	if x == 4:
-                        		data = connectionSocket.recv(2048)
-                        		ok_message = encrypt_sym("ok", sym_cipher)
-                        		connectionSocket.send(ok_message)
-                        		print("getting content")
-                        		while len(data) < content_size:
-                        			print("In loop")
-                        			info = connectionSocket.recv(2048)
-                        			data = data + info
-                        			#send ok message
-                        			ok_message = encrypt_sym("ok", sym_cipher)
-                        			connectionSocket.send(ok_message)
-                        		data = decrypt_sym(data, sym_cipher)
-                        		email_list.append(data)
-                        	else:
-                        		print("In else")
-                        		info = decrypt_sym(connectionSocket.recv(2048), sym_cipher)
-                        		print(info)
-                        		email_list.append(info)
-                        		#send ok message
-                        		ok_message = encrypt_sym("ok", sym_cipher)
-                        		connectionSocket.send(ok_message)
+                            if x == 4:
+                                data = connectionSocket.recv(2048)
+                                ok_message = encrypt_sym("ok", sym_cipher)
+                                connectionSocket.send(ok_message)
+                                print("getting content")
+                                while len(data) < content_size:
+                                    print("In loop")
+                                    info = connectionSocket.recv(2048)
+                                    data = data + info
+                                    #send ok message
+                                    ok_message = encrypt_sym("ok", sym_cipher)
+                                    connectionSocket.send(ok_message)
+                                data = decrypt_sym(data, sym_cipher)
+                                email_list.append(data)
+                            else:
+                                print("In else")
+                                info = decrypt_sym(connectionSocket.recv(2048), sym_cipher)
+                                print(info)
+                                email_list.append(info)
+                                #send ok message
+                                ok_message = encrypt_sym("ok", sym_cipher)
+                                connectionSocket.send(ok_message)
+                          
                         		
 
-                        email_list = []
-                        #Receive the email information
-                        for x in range(5):
-                            info = decrypt_sym(connectionSocket.recv(2048), sym_cipher)
-                            print(info)
-                            email_list.append(info)
-                            #send ok message
-                            ok_message = encrypt_sym("ok", sym_cipher)
-                            connectionSocket.send(ok_message)
+                        
 
                         #Get time and date information
                         time = datetime.datetime.now()
