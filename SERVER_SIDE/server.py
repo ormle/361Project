@@ -287,7 +287,44 @@ def server():
                         
 
                     if user_choice == "2":
-                        pass
+                        #Display inbox list
+                        client_dict = get_json(clientUser)
+                        n_index = len(client_dict)
+                        
+                        #Send index range
+                        index_msg = encrypt_sym("Server request;" + str(n_index), sym_cipher)
+                        connectionSocket.send(index_msg)
+
+                        #Receive ok message
+                        ok_msg = decrypt_sym(connectionSocket.recv(2048), sym_cipher)
+                        print(ok_msg)
+
+                        if n_index == 0: #Empty inbox, return to menu
+                            continue
+                        
+                        #Otherwise at least one email in inbox
+                        inbox_list = "Index\tFrom\t\tDatetime\t\t\tTitle\n"
+                        print(inbox_list)
+                        for index in range(n_index):
+                            i = str(index+1)
+                            sender = client_dict[i][0]
+                            #print('Sender: ', sender)
+                            date = client_dict[i][1]
+                            #print('Date: ', date)
+                            email_title = client_dict[i][2]
+                            #print('Title: ', email_title)
+
+                            inbox_list += i + "\t" + sender + '\t\t' + date + '\t\t' + email_title + '\n'
+                        
+                        #print(inbox_list)
+                        #Send inbox
+                        inbox_list = encrypt_sym(inbox_list, sym_cipher)
+                        connectionSocket.send(inbox_list)
+
+                        #Receive ok message
+                        ok_msg = decrypt_sym(connectionSocket.recv(2048), sym_cipher)
+                        print(ok_msg)
+
                     if user_choice == "3":
                         # View email protocol --
 
