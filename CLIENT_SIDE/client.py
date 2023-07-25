@@ -198,7 +198,29 @@ def client():
                 
 
             if user_choice == "2":
-                pass
+                #Display inbox list
+                #Receive index range + msg
+                index_msg = clientSocket.recv(2048)
+                index_msg = decrypt_sym(index_msg, sym_cipher)
+                index_msg, index_range = index_msg.split(';')
+                #print(index_msg, index_range)
+
+                #Send ok message
+                clientSocket.send(encrypt_sym('ok', sym_cipher))
+
+                if int(index_range) == 0:
+                    print("Inbox is empty.")
+                    continue
+
+                #Otherwise print inbox list
+                inbox_list = clientSocket.recv(2048)
+                inbox_list = decrypt_sym(inbox_list, sym_cipher)
+                #print("received?")
+                print(inbox_list)
+
+                #Send ok message
+                clientSocket.send(encrypt_sym('Inbox list received', sym_cipher))
+                
             if user_choice == "3":
                 # View email protocol 
                 # Receive index msg + index range
