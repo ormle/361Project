@@ -195,6 +195,8 @@ def client():
                 for x in email_list:
                     clientSocket.send(encrypt_sym(x, sym_cipher))
                     ok_message = decrypt_sym(clientSocket.recv(2048), sym_cipher)
+
+                print("The message is sent to the server.")
                 
 
             if user_choice == "2":
@@ -250,16 +252,14 @@ def client():
                 # Note: this following loop was adapted from this example at
                 # https://geekyhumans.com/encrypted-file-transfer-via-sockets-in-python/
                 # Receive email as encrypted byte chunks from server-side
-                print("Beginning file transfer...")
                 f_bytes = b""                
                 while len(f_bytes) < int(en_file_sz):                     
                     f_bytes += clientSocket.recv(4096)
-                    
+                  
                 
-                print("Encrypted File transmitted..")
                 pad_bytes = sym_cipher.decrypt(f_bytes)
                 bytes = unpad(pad_bytes, 16)
-                print(str(bytes, 'ascii'))              
+                print(str(bytes, 'ascii')) # print off the email            
                            
                 # send ok msg
                 clientSocket.send(encrypt_sym("ok",sym_cipher))        

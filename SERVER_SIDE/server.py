@@ -157,7 +157,7 @@ def server():
         try:
             #Server accepts client connection
             connectionSocket, addr = serverSocket.accept()
-            print(addr,'   ',connectionSocket)
+            #print(addr,'   ',connectionSocket)
             pid = os.fork()
             
             # If it is a client process
@@ -171,7 +171,7 @@ def server():
                 #Decrypt username and password
                 userPass = decrypt_RSA(en_userPass).decode('ascii')
                 clientUser, clientPass = userPass.split(' ')
-                print(clientUser, clientPass)               
+                #print(clientUser, clientPass)               
                 
                 
                 
@@ -227,7 +227,7 @@ def server():
 
                     # Receive choice and act accordingly
                     user_choice = decrypt_sym(connectionSocket.recv(2048), sym_cipher)
-                    print("Users menu choice was: " + user_choice)
+                    #print("Users menu choice was: " + user_choice)
                     if user_choice == "1":
 
                         #Send ok message
@@ -236,7 +236,7 @@ def server():
                         
 
                         content_size = int(decrypt_sym(connectionSocket.recv(2048), sym_cipher))
-                        print("Content size: ", content_size)
+                        #print("Content size: ", content_size)
                         connectionSocket.send(ok_message)
                         
                         email_list = []
@@ -246,9 +246,9 @@ def server():
                                 data = connectionSocket.recv(2048)
                                 ok_message = encrypt_sym("ok", sym_cipher)
                                 connectionSocket.send(ok_message)
-                                print("getting content")
+                                #print("getting content")
                                 while len(data) < content_size:
-                                    print("In loop")
+                                    #print("In loop")
                                     info = connectionSocket.recv(2048)
                                     data = data + info
                                     #send ok message
@@ -257,9 +257,9 @@ def server():
                                 data = decrypt_sym(data, sym_cipher)
                                 email_list.append(data)
                             else:
-                                print("In else")
+                                #print("In else")
                                 info = decrypt_sym(connectionSocket.recv(2048), sym_cipher)
-                                print(info)
+                                #print(info)
                                 email_list.append(info)
                                 #send ok message
                                 ok_message = encrypt_sym("ok", sym_cipher)
@@ -284,6 +284,7 @@ def server():
                         #Update the json dictionary for each client
                         data_list = [From, date, Title]
                         save_json(To, data_list)
+                        print("An email from " + From + " is sent to " + To + " has a content length of " + length + " .")
                         
 
                     if user_choice == "2":
@@ -297,14 +298,14 @@ def server():
 
                         #Receive ok message
                         ok_msg = decrypt_sym(connectionSocket.recv(2048), sym_cipher)
-                        print(ok_msg)
+                        #print(ok_msg)
 
                         if n_index == 0: #Empty inbox, return to menu
                             continue
                         
                         #Otherwise at least one email in inbox
                         inbox_list = "Index\tFrom\t\tDatetime\t\t\tTitle\n"
-                        print(inbox_list)
+                        #print(inbox_list)
                         for index in range(n_index):
                             i = str(index+1)
                             sender = client_dict[i][0]
@@ -323,7 +324,7 @@ def server():
 
                         #Receive ok message
                         ok_msg = decrypt_sym(connectionSocket.recv(2048), sym_cipher)
-                        print(ok_msg)
+                        #print(ok_msg)
 
                     if user_choice == "3":
                         # View email protocol --
@@ -342,10 +343,10 @@ def server():
                         
                         # Receive index choice back 
                         index_choice = decrypt_sym(connectionSocket.recv(2048), sym_cipher)
-                        print("User index choice was: " + index_choice)
+                        #print("User index choice was: " + index_choice)
                         # Retrieve the file based on index from client JSON
                         email_name = client_dict[index_choice][2]
-                        print("email chosen: " + email_name + ".txt")
+                        #print("email chosen: " + email_name + ".txt")
 
                         # Send file size to the client-side             
                         #f_sz = os.path.getsize(os.path.join(clientUser, email_name + ".txt"))
@@ -361,7 +362,7 @@ def server():
                             connectionSocket.send(encrypt_sym(en_file_sz, sym_cipher))
                             ok_msg = connectionSocket.recv(2048)
                             connectionSocket.sendall(en_chunk)
-                        ok_msg = connectionSocket.recv(2048)       
+                        ok_msg = connectionSocket.recv(2048) # Recieve ok message  
                                              
                                         
                     if user_choice == "4":
