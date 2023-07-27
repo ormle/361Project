@@ -244,7 +244,7 @@ def client():
 
                 # recieve the file size
                 en_file_sz = decrypt_sym(clientSocket.recv(2048), sym_cipher)
-                print(en_file_sz)    
+                #print(en_file_sz)    
                 # send ok msg
                 clientSocket.send(encrypt_sym("ok",sym_cipher))          
 
