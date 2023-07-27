@@ -252,8 +252,8 @@ def server():
                                     info = connectionSocket.recv(2048)
                                     data = data + info
                                     #send ok message
-                                    ok_message = encrypt_sym("ok", sym_cipher)
-                                    connectionSocket.send(ok_message)
+                                    #ok_message = encrypt_sym("ok", sym_cipher)
+                                    #connectionSocket.send(ok_message)
                                 data = decrypt_sym(data, sym_cipher)
                                 email_list.append(data)
                             else:
