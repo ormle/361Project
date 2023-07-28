@@ -147,21 +147,29 @@ def client():
     
     try:
         #Client connect with the server
-        clientSocket.connect((serverName,serverPort))
-        
-        #Receive server nonce 
+        clientSocket.connect((serverName,serverPort)) 
 
-        #Ask user to enter their username and password
+        #Ask user to enter their username
         username = input("Enter your username: ")
+        #Send username
+        en_Username = encrypt_RSA(username.encode('ascii'), get_Server_key())
+
+        #Receive server nonce
+        s_nonce = decrypt_RSA(clientSocket.recv(2048), username)
+
+        #Ask user to enter their password
         password = input("Enter your password: ")
+
+        #Create client nonce
+        c_nonce = make_nonce()
+        #Add both nonces to the password
+        password += s_nonce + c_nonce
         
-        userPass = username + " " + password
         #Encrypt both with server public key and send
-        en_UserPass = encrypt_RSA(userPass.encode('ascii'), get_Server_key())
+        en_Pass = encrypt_RSA(password.encode('ascii'), get_Server_key())
         
-        #Client send encrypted userPass message to the server
+        #Client send encrypted password+nonces message to the server
         clientSocket.send(en_UserPass)
-        
         
         #Client recieves USERNAME/PASS verification result from the server 
         authentication_response = clientSocket.recv(2048).decode('ascii')

@@ -176,16 +176,26 @@ def server():
             if  pid== 0:
                 
                 serverSocket.close() 
+
+                #Receive username
+                en_username = connectionSocket.recv(2048)
+                #Decrypt username
+                clientUser = decrypt_RSA(en_username).decode('ascii')
                 
-                #Receive encrypted username and password
-                en_userPass = connectionSocket.recv(2048)
+                #Send server nonce
+                s_nonce = make_nonce()
+                en_s_nonce = encrypt_RSA(s_nonce, get_client_pub_key(clientUser))
+                connectionSocket.send(en_s_nonce)
+
+                #Receive encrypted password + nonces
+                en_pass_nonces = connectionSocket.recv(2048)
                 
-                #Decrypt username and password
-                userPass = decrypt_RSA(en_userPass).decode('ascii')
-                clientUser, clientPass = userPass.split(' ')
+                #Decrypt password + nonces
+                password_nonces = decrypt_RSA(en_pass_nonces).decode('ascii')
+                #Split password from nonces
+                #Split from s_nonce since we already know s_nonce
+                password, c_nonce = password_nonces.split(s_nonce)
                 #print(clientUser, clientPass)               
-                
-                
                 
                 #Check if username and password are valid 
                 with open("user_pass.json", "r") as read_file:
@@ -196,10 +206,6 @@ def server():
                     if clientUser in data: # username check
                         stored_pass = data[clientUser] 
                         if stored_pass == clientPass: # password check
-                            #Create nonce
-                            s_nonce = make_nonce()
-                            #Send server nonce
-                            en_s_nonce = encrypt_RSA(s_nonce, get_client_pub_key(clientUser))
                             print("Connection Accepted and Symmetric Key Generated for client: ", clientUser)
                             authentication_response = "GOODCRED"
                             credential_match = True
