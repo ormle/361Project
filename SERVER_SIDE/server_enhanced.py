@@ -80,9 +80,9 @@ def decrypt_sym(en_msg, cipher, s_nonce, c_nonce):
     if s_nonce in data and c_nonce in data:
         #Validate nonces
         if validate_nonce(s_nonce, c_nonce) == False:
-            n_valid = True
-        else:
             n_valid = False
+        else:
+            n_valid = True
         #Return message and validity
         return data.split(s_nonce)[0], n_valid
     #If for whatever reason there are no nonces, return decoded data
@@ -232,19 +232,16 @@ def server():
                 #Split from s_nonce since we already know s_nonce
                 clientPass, c_nonce = password_nonces.split(s_nonce)
                 #print(clientUser, clientPass)
-                #print("Server nonce: ", s_nonce, "\nClient nonce: ", c_nonce)               
+                print(clientUser + " Session Server nonce: ", s_nonce, "\nClient nonce: ", c_nonce)               
                 
                 #Check if nonces have been used before
                 if validate_nonce(s_nonce, c_nonce) == False:
-                    print("Repeated session, terminating connection")
+                    print("Repeated nonce(s) detected. Terminating sessions")                           
                     connectionSocket.close()
                     return
                 #To keep track validity of nonces
                 n_valid = True
 
-                #Save nonces to file to refer to for future
-                save_nonces(s_nonce, c_nonce)
-                print("Nonces saved to database")
                 #Combine nonces together to include in future messages
                 nonces = s_nonce + c_nonce
 
@@ -293,6 +290,11 @@ def server():
                 
                 sym_cipher = AES.new(sym_key, AES.MODE_ECB) # prep cipher w/ symkey for use
                 # while loop for the menu and client requests
+
+                
+
+
+
                 while True and n_valid:
 
                     menu_msg = '''Select the operation:
@@ -308,7 +310,9 @@ def server():
 
                     # Receive choice and act accordingly
                     user_choice, n_valid = decrypt_sym(connectionSocket.recv(2048), sym_cipher, s_nonce, c_nonce)
-
+                    if n_valid:
+                        print(clientUser + ": No nonce abnormalities detected. User menu choice recieved.")
+                    
                     #print("Users menu choice was: " + user_choice)
                     if user_choice == "1":
 
@@ -348,7 +352,12 @@ def server():
                                 #send ok message
                                 ok_message = encrypt_sym("ok", sym_cipher, nonces)
                                 connectionSocket.send(ok_message)
-                          
+                        
+                        # nonce integrity check
+                        if n_valid:
+                            print(clientUser + ": nonces_valid at email sending: ", n_valid)
+                        else:
+                            break
 
                         #Get time and date information
                         time = datetime.datetime.now()
@@ -367,7 +376,7 @@ def server():
                         save_json(To, data_list)
 
                         #ok_msg, n_valid = decrypt_sym(connectionSocket.recv(2048), sym_cipher, s_nonce, c_nonce)
-                        print("n_valid: ", n_valid)
+                        
                         print("An email from " + From + " is sent to " + To + " has a content length of " + length + " .")
                         
 
@@ -383,6 +392,11 @@ def server():
                         #Receive ok message
                         ok_msg, n_valid = decrypt_sym(connectionSocket.recv(2048), sym_cipher, s_nonce, c_nonce)
                         #print(ok_msg)
+
+                        if n_valid:
+                            print(clientUser + " : requests inbox and recieved nonces still valid")
+                        else:
+                            break
 
                         if n_index == 0: #Empty inbox, return to menu
                             continue
@@ -427,7 +441,12 @@ def server():
                         
                         # Receive index choice back 
                         index_choice, n_valid = decrypt_sym(connectionSocket.recv(2048), sym_cipher, s_nonce, c_nonce)
-                        #print("User index choice was: " + index_choice)
+
+                        if n_valid:
+                            print(clientUser + " : User requests email and recieved nonces still valid")
+                        else:
+                            break
+                
                         # Retrieve the file based on index from client JSON
                         email_name = client_dict[index_choice][2]
                         #print("email chosen: " + email_name + ".txt")
@@ -452,7 +471,14 @@ def server():
                     if user_choice == "4":
                         print("Connection terminated with " + clientUser + ".")
                         break
-                             
+
+                if not n_valid:
+                    print("Nonce Replay detected. Connection aborted.")             
+                    connectionSocket.close()    
+                    return
+
+                save_nonces(s_nonce, c_nonce)
+                print("Session nonces saved to the database")             
                 connectionSocket.close()                
                 return
             

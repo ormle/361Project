@@ -170,6 +170,7 @@ def client():
 
         #Create client nonce
         c_nonce = make_nonce()
+        #c_nonce = "334942886728215700708774838109387256747"
         #Add both nonces to the password
         password += s_nonce + c_nonce
         #Combine nonces together for future message encryption
@@ -209,7 +210,9 @@ def client():
 
         sym_cipher = AES.new(sym_key, AES.MODE_ECB) # prep cipher w/ symkey for use
         # while loop for the menu and client requests
+        print("CLIENT NONCES: " + nonces + "\n" + "RECIEVED NONCES: " + r_nonces)
         while True:            
+            
             #Received menu message
             menu_msg = decrypt_sym(clientSocket.recv(2048), sym_cipher, nonces)
             # collect choice from client
