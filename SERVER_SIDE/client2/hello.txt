@@ -1,0 +1,7 @@
+From: client1
+To: client2
+Time and Date: 2023-07-29 19:17:57
+Title: hello
+Content Length: 3
+Content:
+Hi!

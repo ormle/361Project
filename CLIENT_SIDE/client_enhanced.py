@@ -8,7 +8,8 @@ import socket, sys, json, os, glob, datetime
 from Crypto.PublicKey import RSA
 from Crypto.Cipher import AES
 from Crypto.Util.Padding import pad, unpad
-from Crypto.Random import get_random_bytes, random.getrandbits
+from Crypto.Random import get_random_bytes
+from Crypto.Random.random import getrandbits
 from Crypto.Cipher import PKCS1_OAEP
 
 def get_Server_key():
@@ -47,21 +48,26 @@ def decrypt_RSA(enc_msg, clientUser):
     #print(dec_data.decode('ascii'))    
     return dec_data
 
-def encrypt_sym(message, cipher):
+def encrypt_sym(message, cipher, nonces=""):
     '''
     Encrypts a message using the symmetric key
+    Adds nonces to the message
     '''
+    message += nonces
     enc_data = cipher.encrypt(pad(message.encode('ascii'), 16))
     return enc_data
 
-def decrypt_sym(en_msg, cipher):
+def decrypt_sym(en_msg, cipher, nonces=""):
     '''
     Decrypts a message using the symmetric key
+    Can assume nonces are valid as client program doesn't 
+    have to check message integrity
     '''
     padded_msg = cipher.decrypt(en_msg)
     #Remove padding
     data = unpad(padded_msg, 16)
-    return data.decode('ascii')
+    data = data.decode('ascii')
+    return data.split(nonces)[0]
 
     
 def get_content(client):
@@ -128,10 +134,11 @@ def make_nonce():
     nonce = getrandbits(128)
     return str(nonce)
 
-def validate_nonce(message, nonce):
-    '''
-    Checks the integrity of the message
-    '''
+def validate_nonces(nonces, r_nonces):
+    if nonces != r_nonces:
+        return False
+    else:
+        return True
 
 def client():    
     # Server Information
@@ -153,9 +160,10 @@ def client():
         username = input("Enter your username: ")
         #Send username
         en_Username = encrypt_RSA(username.encode('ascii'), get_Server_key())
+        clientSocket.send(en_Username)
 
         #Receive server nonce
-        s_nonce = decrypt_RSA(clientSocket.recv(2048), username)
+        s_nonce = decrypt_RSA(clientSocket.recv(2048), username).decode('ascii')
 
         #Ask user to enter their password
         password = input("Enter your password: ")
@@ -164,12 +172,15 @@ def client():
         c_nonce = make_nonce()
         #Add both nonces to the password
         password += s_nonce + c_nonce
-        
+        #Combine nonces together for future message encryption
+        nonces = s_nonce + c_nonce
+        nonces_byte = nonces.encode('utf-8')
+
         #Encrypt both with server public key and send
         en_Pass = encrypt_RSA(password.encode('ascii'), get_Server_key())
         
         #Client send encrypted password+nonces message to the server
-        clientSocket.send(en_UserPass)
+        clientSocket.send(en_Pass)
         
         #Client recieves USERNAME/PASS verification result from the server 
         authentication_response = clientSocket.recv(2048).decode('ascii')
@@ -179,9 +190,17 @@ def client():
         # If the credentials were bad, expect to hear about it from the server w/ unecrypted msg
         # If good, expect to recieve the encrypted SYM KEY
         if authentication_response == "GOODCRED":            
-            # receive SYM_KEY (RSA encrypted)
-            sym_key = decrypt_RSA(clientSocket.recv(2048), username) 
-            #print("SYMKEY: ", sym_key)
+            # receive SYM_KEY combined with nonces (RSA encrypted)
+            combined_data = decrypt_RSA(clientSocket.recv(2048), username) 
+            #Calculate how long sym_key is to separate from nonces
+            sym_key_len = len(combined_data) - len(nonces_byte)
+            #Separate sym_key and nonces
+            sym_key = combined_data[:sym_key_len]
+            r_nonces = combined_data[sym_key_len+1:].decode("utf-8")
+            #Validate the nonces
+            validate_nonces(nonces, r_nonces)
+            #print("sym_key?: ", combined_data[:sym_key_len])
+            #print("nonces?: ", combined_data[sym_key_len+1:]) 
         else:
          # recieve a msg that we've entered the wrong credentials and then terminate
          print(clientSocket.recv(2048).decode('ascii'))
@@ -191,32 +210,35 @@ def client():
         sym_cipher = AES.new(sym_key, AES.MODE_ECB) # prep cipher w/ symkey for use
         # while loop for the menu and client requests
         while True:            
+            #Received menu message
+            menu_msg = decrypt_sym(clientSocket.recv(2048), sym_cipher, nonces)
             # collect choice from client
-            menu_msg = decrypt_sym(clientSocket.recv(2048), sym_cipher)
             user_choice = input(menu_msg)
             # send choice over to server-side
-            clientSocket.send(encrypt_sym(user_choice, sym_cipher))
+            clientSocket.send(encrypt_sym(user_choice, sym_cipher, nonces))
             if user_choice == "1":
 
                 #Receive the ok message
-                ok_message = decrypt_sym(clientSocket.recv(2048), sym_cipher)
+                ok_message = decrypt_sym(clientSocket.recv(2048), sym_cipher, nonces)
                 #Start making the email
                 email_list = make_email(username)
 
-                content_size = str(len((encrypt_sym(email_list[3], sym_cipher))))
-                clientSocket.send(encrypt_sym(content_size, sym_cipher))
-                ok_message = decrypt_sym(clientSocket.recv(2048), sym_cipher)
+                content_size = str(len((encrypt_sym(email_list[3], sym_cipher, nonces))))
+                clientSocket.send(encrypt_sym(content_size, sym_cipher, nonces))
+                ok_message = decrypt_sym(clientSocket.recv(2048), sym_cipher, nonces)
                 
                 
                 #Get and send the From
                 e_from = username
-                clientSocket.send(encrypt_sym(e_from, sym_cipher))
-                ok_message = decrypt_sym(clientSocket.recv(2048), sym_cipher)
+                clientSocket.send(encrypt_sym(e_from, sym_cipher, nonces))
+                ok_message = decrypt_sym(clientSocket.recv(2048), sym_cipher, nonces)
 
                 #Loop through rest of email
                 for x in email_list:
-                    clientSocket.send(encrypt_sym(x, sym_cipher))
-                    ok_message = decrypt_sym(clientSocket.recv(2048), sym_cipher)
+                    clientSocket.send(encrypt_sym(x, sym_cipher, nonces))
+                    ok_message = decrypt_sym(clientSocket.recv(2048), sym_cipher, nonces)
+
+                #clientSocket.send(encrypt_sym("this is sent", sym_cipher, nonces))
 
                 print("The message is sent to the server.")
                 
@@ -225,12 +247,12 @@ def client():
                 #Display inbox list
                 #Receive index range + msg
                 index_msg = clientSocket.recv(2048)
-                index_msg = decrypt_sym(index_msg, sym_cipher)
+                index_msg = decrypt_sym(index_msg, sym_cipher, nonces)
                 index_msg, index_range = index_msg.split(';')
                 #print(index_msg, index_range)
 
                 #Send ok message
-                clientSocket.send(encrypt_sym('ok', sym_cipher))
+                clientSocket.send(encrypt_sym('ok', sym_cipher, nonces))
 
                 if int(index_range) == 0:
                     print("Inbox is empty.")
@@ -238,18 +260,18 @@ def client():
 
                 #Otherwise print inbox list
                 inbox_list = clientSocket.recv(2048)
-                inbox_list = decrypt_sym(inbox_list, sym_cipher)
+                inbox_list = decrypt_sym(inbox_list, sym_cipher, nonces)
                 #print("received?")
                 print(inbox_list)
 
                 #Send ok message
-                clientSocket.send(encrypt_sym('Inbox list received', sym_cipher))
+                clientSocket.send(encrypt_sym('Inbox list received', sym_cipher, nonces))
                 
             if user_choice == "3":
                 # View email protocol 
                 # Receive index msg + index range
                 index_msg = clientSocket.recv(2048)
-                index_msg = decrypt_sym(index_msg, sym_cipher)
+                index_msg = decrypt_sym(index_msg, sym_cipher, nonces)
                 index_msg, index_range = index_msg.split(";")
                 #print(index_msg, index_range)
                 # Check if inbox empty
@@ -262,13 +284,13 @@ def client():
                     if int(index_choice) <= int(index_range) and (int(index_choice) >= 0):
                         break
                 # Send index choice back
-                clientSocket.send(encrypt_sym(index_choice, sym_cipher))                
+                clientSocket.send(encrypt_sym(index_choice, sym_cipher, nonces))                
 
                 # recieve the file size
-                en_file_sz = decrypt_sym(clientSocket.recv(2048), sym_cipher)
+                en_file_sz = decrypt_sym(clientSocket.recv(2048), sym_cipher, nonces)
                 #print(en_file_sz)    
                 # send ok msg
-                clientSocket.send(encrypt_sym("ok",sym_cipher))          
+                clientSocket.send(encrypt_sym("ok",sym_cipher, nonces))          
 
 
                 # Note: this following loop was adapted from this example at
@@ -284,7 +306,7 @@ def client():
                 print(str(bytes, 'ascii')) # print off the email            
                            
                 # send ok msg
-                clientSocket.send(encrypt_sym("ok",sym_cipher))        
+                clientSocket.send(encrypt_sym("ok",sym_cipher, nonces))        
                 
                 
                      

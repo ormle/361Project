@@ -9,7 +9,8 @@ import socket, sys, json, os, glob, datetime
 from Crypto.PublicKey import RSA
 from Crypto.Cipher import AES
 from Crypto.Util.Padding import pad, unpad
-from Crypto.Random import get_random_bytes, random.getrandbits
+from Crypto.Random import get_random_bytes
+from Crypto.Random.random import getrandbits
 from Crypto.Cipher import PKCS1_OAEP
 
 def get_server_privateKey():
@@ -58,23 +59,35 @@ def decrypt_RSA(enc_msg):
     #print(dec_data.decode('ascii'))    
     return dec_data
 
-def encrypt_sym(message, cipher):
+def encrypt_sym(message, cipher, nonces=""):
     '''
     Encrypts a message using the symmetric key
+    Adds nonces to the message
     '''
+    message += nonces
     enc_data = cipher.encrypt(pad(message.encode('ascii'), 16))
     return enc_data
 
-def decrypt_sym(en_msg, cipher):
+def decrypt_sym(en_msg, cipher, s_nonce, c_nonce):
     '''
     Decrypts a message using the symmetric key
     '''
     padded_msg = cipher.decrypt(en_msg)
     #Remove padding
     data = unpad(padded_msg, 16)
-    return data.decode('ascii')
+    data = data.decode('ascii')
+    # Make sure nonces are part of the message
+    if s_nonce in data and c_nonce in data:
+        #Validate nonces
+        if validate_nonce(s_nonce, c_nonce) == False:
+            n_valid = True
+        else:
+            n_valid = False
+        #Return message and validity
+        return data.split(s_nonce)[0], n_valid
+    #If for whatever reason there are no nonces, return decoded data
+    return data
 
-    
 def save_email(email, title, to):
 	'''
 	This function saves the email as a text file into each 
@@ -135,10 +148,31 @@ def make_nonce():
     nonce = getrandbits(128)
     return str(nonce)
 
-def validate_nonce(message, nonce):
+def save_nonces(s_nonce, c_nonce):
+    '''
+    Updates the json file which holds the used nonces
+    '''
+    with open("nonces.json", 'r') as outfile:
+        used_nonces = json.load(outfile)
+    
+    used_nonces.append(s_nonce)
+    used_nonces.append(c_nonce)
+
+    with open("nonces.json", 'w') as outfile:
+        json_object = json.dumps(used_nonces)
+        outfile.write(json_object)
+
+def validate_nonce(s_nonce = '', c_nonce = ''):
     '''
     Checks the integrity of the message
     '''
+    with open("nonces.json", 'r') as outfile:
+        used_nonces = json.load(outfile)
+        
+        if s_nonce in used_nonces or c_nonce in used_nonces:
+            return False
+        else:
+            return True
 
 def server():
     #Server port
@@ -181,10 +215,12 @@ def server():
                 en_username = connectionSocket.recv(2048)
                 #Decrypt username
                 clientUser = decrypt_RSA(en_username).decode('ascii')
-                
+                print("Received username: ", clientUser)
+
                 #Send server nonce
                 s_nonce = make_nonce()
-                en_s_nonce = encrypt_RSA(s_nonce, get_client_pub_key(clientUser))
+                #print("Server nonce: ", s_nonce, "Type: ", type(s_nonce))
+                en_s_nonce = encrypt_RSA(s_nonce.encode('ascii'), get_client_pub_key(clientUser))
                 connectionSocket.send(en_s_nonce)
 
                 #Receive encrypted password + nonces
@@ -194,9 +230,24 @@ def server():
                 password_nonces = decrypt_RSA(en_pass_nonces).decode('ascii')
                 #Split password from nonces
                 #Split from s_nonce since we already know s_nonce
-                password, c_nonce = password_nonces.split(s_nonce)
-                #print(clientUser, clientPass)               
+                clientPass, c_nonce = password_nonces.split(s_nonce)
+                #print(clientUser, clientPass)
+                #print("Server nonce: ", s_nonce, "\nClient nonce: ", c_nonce)               
                 
+                #Check if nonces have been used before
+                if validate_nonce(s_nonce, c_nonce) == False:
+                    print("Repeated session, terminating connection")
+                    connectionSocket.close()
+                    return
+                #To keep track validity of nonces
+                n_valid = True
+
+                #Save nonces to file to refer to for future
+                save_nonces(s_nonce, c_nonce)
+                print("Nonces saved to database")
+                #Combine nonces together to include in future messages
+                nonces = s_nonce + c_nonce
+
                 #Check if username and password are valid 
                 with open("user_pass.json", "r") as read_file:
                     data = json.load(read_file)
@@ -222,9 +273,16 @@ def server():
 
                 
                 if credential_match:
-                    # gen symkey, encrypt RSA and send
+                    # gen symkey, add nonces, encrypt RSA and send
                     sym_key = make_symKey()
-                    en_sym_key = encrypt_RSA(sym_key, get_client_pub_key(clientUser))
+                    #Make nonces into byte to be able to add to sym_key
+                    nonces_byte = nonces.encode("utf-8")
+                    #Combine sym_key and nonces
+                    #print("sym_key", sym_key, "\nnonces: ", nonces_byte)
+                    combined_data = sym_key + nonces_byte
+                    #print("combined: ", combined_data, "length: ", len(combined_data))
+                    #Encrypt combined data
+                    en_sym_key = encrypt_RSA(combined_data, get_client_pub_key(clientUser))
                     connectionSocket.send(en_sym_key)
                     pass
 
@@ -235,7 +293,7 @@ def server():
                 
                 sym_cipher = AES.new(sym_key, AES.MODE_ECB) # prep cipher w/ symkey for use
                 # while loop for the menu and client requests
-                while True:
+                while True and n_valid:
 
                     menu_msg = '''Select the operation:
     1) Create and send an email
@@ -243,21 +301,25 @@ def server():
     3) Display the email contents
     4) Terminate the connection
     choice: '''
+
                     # Encrypt the menu and send it to the client side
-                    en_menu_msg = encrypt_sym(menu_msg, sym_cipher)
+                    en_menu_msg = encrypt_sym(menu_msg, sym_cipher, nonces)
                     connectionSocket.send(en_menu_msg)
 
                     # Receive choice and act accordingly
-                    user_choice = decrypt_sym(connectionSocket.recv(2048), sym_cipher)
+                    user_choice, n_valid = decrypt_sym(connectionSocket.recv(2048), sym_cipher, s_nonce, c_nonce)
+
                     #print("Users menu choice was: " + user_choice)
                     if user_choice == "1":
 
                         #Send ok message
-                        ok_message = encrypt_sym("Send the email", sym_cipher)
+                        ok_message = encrypt_sym("Send the email", sym_cipher, nonces)
                         connectionSocket.send(ok_message)
                         
-
-                        content_size = int(decrypt_sym(connectionSocket.recv(2048), sym_cipher))
+                        combined_content = decrypt_sym(connectionSocket.recv(2048), sym_cipher, s_nonce, c_nonce)
+                        content_size = int(combined_content[0])
+                        n_valid = combined_content[1]
+                        
                         #print("Content size: ", content_size)
                         connectionSocket.send(ok_message)
                         
@@ -266,7 +328,7 @@ def server():
                         for x in range(5):
                             if x == 4:
                                 data = connectionSocket.recv(2048)
-                                ok_message = encrypt_sym("ok", sym_cipher)
+                                ok_message = encrypt_sym("ok", sym_cipher, nonces)
                                 connectionSocket.send(ok_message)
                                 #print("getting content")
                                 while len(data) < content_size:
@@ -276,20 +338,17 @@ def server():
                                     #send ok message
                                     #ok_message = encrypt_sym("ok", sym_cipher)
                                     #connectionSocket.send(ok_message)
-                                data = decrypt_sym(data, sym_cipher)
+                                data, n_valid = decrypt_sym(data, sym_cipher, s_nonce, c_nonce)
                                 email_list.append(data)
                             else:
                                 #print("In else")
-                                info = decrypt_sym(connectionSocket.recv(2048), sym_cipher)
+                                info, n_valid = decrypt_sym(connectionSocket.recv(2048), sym_cipher, s_nonce, c_nonce)
                                 #print(info)
                                 email_list.append(info)
                                 #send ok message
-                                ok_message = encrypt_sym("ok", sym_cipher)
+                                ok_message = encrypt_sym("ok", sym_cipher, nonces)
                                 connectionSocket.send(ok_message)
                           
-                        		
-
-                        
 
                         #Get time and date information
                         time = datetime.datetime.now()
@@ -306,6 +365,9 @@ def server():
                         #Update the json dictionary for each client
                         data_list = [From, date, Title]
                         save_json(To, data_list)
+
+                        #ok_msg, n_valid = decrypt_sym(connectionSocket.recv(2048), sym_cipher, s_nonce, c_nonce)
+                        print("n_valid: ", n_valid)
                         print("An email from " + From + " is sent to " + To + " has a content length of " + length + " .")
                         
 
@@ -315,11 +377,11 @@ def server():
                         n_index = len(client_dict)
                         
                         #Send index range
-                        index_msg = encrypt_sym("Server request;" + str(n_index), sym_cipher)
+                        index_msg = encrypt_sym("Server request;" + str(n_index), sym_cipher, nonces)
                         connectionSocket.send(index_msg)
 
                         #Receive ok message
-                        ok_msg = decrypt_sym(connectionSocket.recv(2048), sym_cipher)
+                        ok_msg, n_valid = decrypt_sym(connectionSocket.recv(2048), sym_cipher, s_nonce, c_nonce)
                         #print(ok_msg)
 
                         if n_index == 0: #Empty inbox, return to menu
@@ -341,11 +403,11 @@ def server():
                         
                         #print(inbox_list)
                         #Send inbox
-                        inbox_list = encrypt_sym(inbox_list, sym_cipher)
+                        inbox_list = encrypt_sym(inbox_list, sym_cipher, nonces)
                         connectionSocket.send(inbox_list)
 
                         #Receive ok message
-                        ok_msg = decrypt_sym(connectionSocket.recv(2048), sym_cipher)
+                        ok_msg, n_valid = decrypt_sym(connectionSocket.recv(2048), sym_cipher, s_nonce, c_nonce)
                         #print(ok_msg)
 
                     if user_choice == "3":
@@ -357,14 +419,14 @@ def server():
                         
                         # Ask the user for their index choice
                         # Also send the email index range for input check on client side
-                        index_msg = encrypt_sym("the server request email index;" + str(n_index), sym_cipher)
+                        index_msg = encrypt_sym("the server request email index;" + str(n_index), sym_cipher, nonces)
                         connectionSocket.send(index_msg)
 
                         if n_index == 0: # inbox empty return to menu
                              continue
                         
                         # Receive index choice back 
-                        index_choice = decrypt_sym(connectionSocket.recv(2048), sym_cipher)
+                        index_choice, n_valid = decrypt_sym(connectionSocket.recv(2048), sym_cipher, s_nonce, c_nonce)
                         #print("User index choice was: " + index_choice)
                         # Retrieve the file based on index from client JSON
                         email_name = client_dict[index_choice][2]
